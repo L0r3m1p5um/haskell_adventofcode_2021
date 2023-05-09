@@ -49,29 +49,15 @@ simulate' _ Nothing = Nothing
 simulate' 0 fishmap = fishmap
 simulate' n fishmap = simulate' (n - 1) fishmap >>= updateFishMap
 
+extractMaybeList :: [Maybe a] -> Maybe [a]
+extractMaybeList [] = Just []
+extractMaybeList (Nothing : xs) = Nothing
+extractMaybeList ((Just x) : xs) = Just (x :) <*> extractMaybeList xs
+
 updateFishMap :: Map.Map Int Int -> Maybe (Map.Map Int Int)
 updateFishMap fishmap = updateFishMap' (Just fishmap)
   where
     updateFishMap' fishmap' = do
-      count8 <- Map.lookup 8 fishmap
-      count7 <- Map.lookup 7 fishmap
-      count6 <- Map.lookup 6 fishmap
-      count5 <- Map.lookup 5 fishmap
-      count4 <- Map.lookup 4 fishmap
-      count3 <- Map.lookup 3 fishmap
-      count2 <- Map.lookup 2 fishmap
-      count1 <- Map.lookup 1 fishmap
-      count0 <- Map.lookup 0 fishmap
-      return
-        ( Map.fromList
-            [ (0, count1),
-              (1, count2),
-              (2, count3),
-              (3, count4),
-              (4, count5),
-              (5, count6),
-              (6, count7 + count0),
-              (7, count8),
-              (8, count0)
-            ]
-        )
+      counts <- extractMaybeList $ map (\x -> Map.lookup x fishmap) [0 .. 8]
+      let newFish = map (\x -> (x, (if x == 6 then head counts else 0) + counts !! ((x + 1) `mod` 9))) [0 .. 8]
+      return (Map.fromList newFish)
