@@ -49,7 +49,7 @@ traverseEdge path (x, y)
     lastNode = head path
     isValidEdge :: Edge -> Bool
     isValidEdge (src, (_, Large)) = src == lastNode
-    isValidEdge (src, (dest, Small)) = dest /= "start" && (not hasVisitedSmallTwice || (dest, Small) `notElem` path) && src == lastNode
+    isValidEdge (src, (dest, Small)) = src == lastNode && dest /= "start" && (not hasVisitedSmallTwice || (dest, Small) `notElem` path)
     -- Part 1: isValidEdge (src, (dest, Small)) = (dest, Small) `notElem` path && src == lastNode
     smallNodes = filter (\(_, size) -> size == Small) path
     hasVisitedSmallTwice :: Bool
