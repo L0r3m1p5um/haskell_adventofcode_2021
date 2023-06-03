@@ -41,18 +41,17 @@ isFinal :: Path -> Bool
 isFinal path = (fst . head) path == "end"
 
 traverseEdge :: Path -> Edge -> Maybe Path
-traverseEdge path (src, dest)
-  | fst lastNode == "end" = Just path
-  | isValidEdge (src, dest) = Just $ dest : path
-  | isValidEdge (dest, src) = Just $ src : path
+traverseEdge path (x, y)
+  | isValidEdge (x, y) = Just $ y : path
+  | isValidEdge (y, x) = Just $ x : path
   | otherwise = Nothing
   where
     lastNode = head path
     isValidEdge :: Edge -> Bool
-    isValidEdge (src, (dest, Large)) = src == lastNode
+    isValidEdge (src, (_, Large)) = src == lastNode
     isValidEdge (src, (dest, Small)) = dest /= "start" && (not hasVisitedSmallTwice || (dest, Small) `notElem` path) && src == lastNode
     -- Part 1: isValidEdge (src, (dest, Small)) = (dest, Small) `notElem` path && src == lastNode
-    smallNodes = filter (\x -> snd x == Small) path
+    smallNodes = filter (\(_, size) -> size == Small) path
     hasVisitedSmallTwice :: Bool
     hasVisitedSmallTwice = length smallNodes /= length (Set.fromList smallNodes)
 
