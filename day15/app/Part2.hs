@@ -1,27 +1,31 @@
 module Part2 where
 
 import Control.Monad.Trans.State
-import Data.List (delete, find, insert)
+import Data.List (delete, find, insert, sortBy)
+import Data.Maybe (fromJust, mapMaybe)
 import Data.Set qualified as Set
+import Data.Vector qualified as V
 
 solvePart2 :: String -> IO ()
 solvePart2 input = do
   let (nodes, (dimX, dimY)) = generateMap 1 $ parseNodes input
-      initState = SolutionState {visited = Set.empty, unvisited = nodes, start = (0, 0), dest = (dimX - 1, dimY - 1), dimensions = (dimX, dimY)}
+      initState = SolutionState {unvisited = V.fromList nodes, start = (0, 0), dest = (dimX - 1, dimY - 1), dimensions = (dimX, dimY)}
   putStrLn "Part 1"
+  --   print $ runState (update Node {visited = True, coords = (0, 0), risk = 12, distance = 12}) initState
+  --  print $ evalState (neighbors (head nodes)) initState
   print $ evalState djikstra initState
   putStrLn "Part 2"
   let (nodes, (dimX, dimY)) = generateMap 5 $ parseNodes input
-      initState2 = SolutionState {visited = Set.empty, unvisited = nodes, start = (0, 0), dest = (dimX - 1, dimY - 1), dimensions = (dimX, dimY)}
+      initState2 = SolutionState {unvisited = V.fromList nodes, start = (0, 0), dest = (dimX - 1, dimY - 1), dimensions = (dimX, dimY)}
   print $ evalState djikstra initState2
   return ()
 
-data Node = Node {coords :: (Int, Int), risk :: Int, distance :: Int} deriving (Show, Eq, Ord)
+data Node = Node {visited :: Bool, coords :: (Int, Int), risk :: Int, distance :: Int} deriving (Show, Eq, Ord)
 
-data SolutionState = SolutionState {unvisited :: Set.Set Node, start :: (Int, Int), dest :: (Int, Int), dimensions :: (Int, Int)} deriving (Show)
+data SolutionState = SolutionState {unvisited :: V.Vector Node, start :: (Int, Int), dest :: (Int, Int), dimensions :: (Int, Int)} deriving (Show)
 
-parseNodes :: String -> (Set.Set Node, (Int, Int))
-parseNodes input = (Set.fromList $ map (\x -> Node {coords = x, risk = atCoord riskGrid x, distance = maxBound}) nodeCoords, (dimX, dimY))
+parseNodes :: String -> ([Node], (Int, Int))
+parseNodes input = (map (\x -> Node {coords = x, risk = atCoord riskGrid x, distance = maxBound, visited = False}) nodeCoords, (dimX, dimY))
   where
     parseDistance :: String -> [[Int]]
     parseDistance input = map (map (\x -> read [x])) $ lines input
@@ -32,11 +36,13 @@ parseNodes input = (Set.fromList $ map (\x -> Node {coords = x, risk = atCoord r
     dimY = length riskGrid
     nodeCoords = [(x, y) | x <- [0 .. dimX - 1], y <- [0 .. dimY - 1]]
 
-generateMap :: Int -> (Set.Set Node, (Int, Int)) -> (Set.Set Node, (Int, Int))
+generateMap :: Int -> ([Node], (Int, Int)) -> ([Node], (Int, Int))
 generateMap blockDim (nodes, (dimX, dimY)) = (newNodes, (dimX * blockDim, dimY * blockDim))
   where
-    newNodes = Set.fromList $ setStart $ map blockValue zippedNodes
-    zippedNodes = [(n, c) | n <- Set.toList nodes, c <- [(x, y) | x <- [0 .. blockDim - 1], y <- [0 .. blockDim - 1]]]
+    maxDistance = sum $ replicate (dimX * blockDim * dimY * blockDim) 9
+    setMaxDistance x = x {distance = maxDistance}
+    newNodes = setStart $ sortBy (\x y -> compare (coords x) (coords y)) $ map (setMaxDistance . blockValue) zippedNodes
+    zippedNodes = [(n, c) | n <- nodes, c <- [(x, y) | x <- [0 .. blockDim - 1], y <- [0 .. blockDim - 1]]]
     setStart :: [Node] -> [Node]
     setStart nodes = newNodes
       where
@@ -50,37 +56,48 @@ generateMap blockDim (nodes, (dimX, dimY)) = (newNodes, (dimX * blockDim, dimY *
         blockRisk = x + y
         newRisk = ((risk node - 1) + blockRisk) `mod` 9 + 1
 
-neighbors :: Node -> State SolutionState (Set.Set Node)
+neighbors :: Node -> State SolutionState [Node]
 neighbors node = do
   adjacentUnvisited $ coords node
   where
-    adjacentUnvisited :: (Int, Int) -> State SolutionState (Set.Set Node)
+    adjacentUnvisited :: (Int, Int) -> State SolutionState [Node]
     adjacentUnvisited (x, y) = do
-      Set.filter (\x -> coords x `elem` possible) . unvisited <$> get
+      dim <- dimensions <$> get
+      nodes <- unvisited <$> get
+      let result = filter (not . visited) $ map (nodes V.!) (indices dim)
+      return result
       where
-        possible = [(x - 1, y), (x + 1, y), (x, y - 1), (x, y + 1)]
+        indices :: (Int, Int) -> [Int]
+        indices dim = mapMaybe (coordToIndex dim) [(x - 1, y), (x + 1, y), (x, y - 1), (x, y + 1)]
 
 contains :: Set.Set Node -> Node -> Bool
 contains nodeSet node = any (\x -> coords x == coords node) nodeSet
 
+coordToIndex :: (Int, Int) -> (Int, Int) -> Maybe Int
+coordToIndex (dimX, dimY) (x, y)
+  | isValid = Just index
+  | otherwise = Nothing
+  where
+    isValid = x < dimX && y < dimY && x >= 0 && y >= 0
+    index = y + dimY * x
+
 update :: Node -> State SolutionState ()
 update node = do
   s <- get
-  if contains (visited s) node
-    then put $ s {visited = updateNodeSet (visited s) node}
-    else put $ s {unvisited = updateNodeSet (unvisited s) node}
+  put $ s {unvisited = updateNodeSet (dimensions s) (unvisited s) node}
   where
-    updateNodeSet :: Set.Set Node -> Node -> Set.Set Node
-    updateNodeSet nodeSet node = Set.insert node filtered
+    updateNodeSet :: (Int, Int) -> V.Vector Node -> Node -> V.Vector Node
+    updateNodeSet dims nodeSet node = nodeSet V.// [(index, node)]
       where
-        filtered = Set.filter (\x -> coords x /= coords node) nodeSet
+        index = fromJust (coordToIndex dims $ coords node)
 
 nextCurrent :: State SolutionState Node
 nextCurrent = do
   s <- get
-  let unvisitedNodes = unvisited s
-      nextCurrent = Set.fold (\node acc -> if distance node < distance acc then node else acc) Node {coords = (-1, -1), risk = 0, distance = maxBound} unvisitedNodes
-  put $ s {visited = Set.insert nextCurrent (visited s), unvisited = Set.delete nextCurrent (unvisited s)}
+  let unvisitedNodes = V.filter (not . visited) $ unvisited s
+      nextCurrent = foldl (\node acc -> if distance node < distance acc then node else acc) Node {visited = False, coords = (-1, -1), risk = 0, distance = maxBound} unvisitedNodes
+  update nextCurrent {visited = True}
+  --   put $ s {encountered = Set.delete (fromJust $ coordToIndex (dimensions s) $ coords nextCurrent) (encountered s)}
   return nextCurrent
 
 djikstra :: State SolutionState Node
@@ -91,8 +108,11 @@ djikstra = do
     then return current
     else do
       n <- neighbors current
-      let updated = Set.map (updateDistance current) n
-      mapM_ update $ Set.toList updated
+      s <- get
+      -- let newIndices = Set.fromList $ map (\x -> fromJust $ coordToIndex (dimensions s) (coords x)) n
+      -- put $ s {encountered = Set.union (encountered s) newIndices}
+      let updated = map (updateDistance current) n
+      mapM_ update updated
       djikstra
   where
     updateDistance :: Node -> Node -> Node

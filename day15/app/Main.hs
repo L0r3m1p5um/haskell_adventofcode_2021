@@ -9,8 +9,8 @@ import System.Environment (getArgs)
 
 main :: IO ()
 main = do
-  --  (filename : _) <- getArgs
-  input <- readFile "input.txt"
+  (filename : _) <- getArgs
+  input <- readFile filename
   -- putStrLn "Part 1"
   -- let grid = parseGrid input
   -- shortestPath <- findShortestPath grid
