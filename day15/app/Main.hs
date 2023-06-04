@@ -4,16 +4,18 @@ module Main where
 
 import Data.List (findIndex)
 import Data.Maybe (fromJust)
+import Part2
 import System.Environment (getArgs)
 
 main :: IO ()
 main = do
-  (filename : _) <- getArgs
-  input <- readFile filename
-  putStrLn "Part 1"
-  let grid = parseGrid input
-  shortestPath <- findShortestPath grid
-  print $ (snd . head) shortestPath
+  --  (filename : _) <- getArgs
+  input <- readFile "input.txt"
+  -- putStrLn "Part 1"
+  -- let grid = parseGrid input
+  -- shortestPath <- findShortestPath grid
+  -- print $ (snd . head) shortestPath
+  solvePart2 input
 
 type Grid = [[Int]]
 
